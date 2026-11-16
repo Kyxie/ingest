@@ -1,0 +1,5 @@
+/ingest
+*.test
+coverage*
+pcs_config.json
+.ddns_go_config.yaml

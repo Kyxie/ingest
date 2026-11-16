@@ -1,0 +1,16 @@
+{
+  "sources": "/cards",
+  "target": "/media",
+  "state": "/state",
+  "require_mount": true,
+  "poll_seconds": 30,
+  "stable_seconds": 10,
+  "retention_days": 90,
+  "auto_prune": false,
+  "remote": "/Camera Archives",
+  "pcs": "BaiduPCS-Go",
+  "verify_download": true,
+  "upload_timeout_minutes": 1440,
+  "raw_extensions": [".nef", ".dng", ".arw", ".cr2", ".cr3", ".raf", ".orf", ".rw2", ".nrw"],
+  "proxy_extensions": [".lrf", ".thm"]
+}
