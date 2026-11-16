@@ -33,5 +33,3 @@ Only semantic version tag pushes trigger `.github/workflows/ingest-builder.yml`.
 - [Development and verification](docs/development.md): isolated fixtures, hot reload, image checks, and release behavior.
 - [Configuration and data safety](docs/configuration.md): storage layout, selection, verification, and retention.
 - [Deployment](docs/deployment.md): environment variables, disk permissions, Baidu login, and card mounts.
-
-This is an independent implementation inspired by [hktkzyx/ingest](https://github.com/hktkzyx/ingest); no source was copied.
