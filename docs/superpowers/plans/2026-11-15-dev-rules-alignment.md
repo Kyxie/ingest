@@ -4,6 +4,8 @@
 
 **Goal:** Align the existing ingest repository with `../dev-rules/AGENTS.md` while preserving import and retention behavior.
 
+**Update:** The original tag-only publication and source-built BaiduPCS-Go are superseded by the automatic dependency update flow in `docs/deployment.md`. The uploader now consumes the personal multi-platform image.
+
 **Architecture:** Keep the Go CLI and scratch importer/Alpine uploader. Use N100 Docker Compose for physical cards and persistent media, an isolated Docker development environment, and GHCR tag releases with the built-in GITHUB_TOKEN.
 
 **Tech Stack:** Go standard library, Docker Compose, Air, Bash, just, GitHub Actions.

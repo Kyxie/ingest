@@ -1,0 +1,12 @@
+[Unit]
+Description=Pull and apply current ingest images
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/ingest
+ExecStart=/usr/bin/docker compose -f docker-compose.yml pull --quiet
+ExecStart=/usr/bin/docker compose -f docker-compose.yml up -d --no-build --wait --wait-timeout 120
+TimeoutStartSec=15min

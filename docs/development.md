@@ -19,8 +19,10 @@ The verification image never mounts local media or account credentials. Go tests
 
 `just prod-build` builds the scratch importer as `local/ingest:latest-importer` and the Alpine uploader as `local/ingest:latest`. To test these images with production Compose, explicitly set `IMAGE_REPOSITORY=local/ingest` in `.env`; `just prod-run` accesses the production paths configured there. Use disposable paths for local runtime tests.
 
+Local builds default to `ghcr.io/kyxie/baidupcs-go:v4.0.2`. Override the dependency with `PCS_IMAGE=ghcr.io/kyxie/baidupcs-go@sha256:<digest> just prod-build`. The uploader copies the static executable from that image; it does not clone upstream source. The dependency must provide both target architectures before publishing ingest. CI resolves `latest` to a digest and validates both architectures before building.
+
 ## Releases
 
 Releasing is an explicit user action: `just release` (patch), `just minor`, or `just major`. The script checks `Kyxie <kyriexie@outlook.com>`, a clean working tree, an attached branch, and that the branch is not behind or diverged from origin. It fetches remote tags before calculating the version; without tags, a patch release starts at `v0.0.1`.
 
-It creates a local tag and atomically pushes both branch HEAD and the tag to origin. A failed push removes the local tag. No version is changed in CI. Only semantic version tag pushes trigger publication; ordinary commits and pull requests do not run the builder workflow, so run `just verify` locally before requesting a release.
+It creates a local tag and atomically pushes both branch HEAD and the tag to origin. A failed push removes the local tag. No version is changed in CI. Tag builds publish both services with release tags. Scheduled dependency builds and manual retries from `main` publish only uploader `latest` aliases. Ordinary commits and pull requests do not run the builder workflow, so run `just verify` locally before requesting a release.

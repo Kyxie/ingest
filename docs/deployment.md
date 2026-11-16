@@ -26,11 +26,11 @@ Run `just verify`, commit the intended changes, then explicitly release with `ju
 
 | Tag under `ghcr.io/<github-user>/<project>` | Runtime |
 | --- | --- |
-| `latest`, `vA.B.C` | Alpine uploader with TLS certificates, timezone data, and pinned BaiduPCS-Go v4.0.2 |
+| `latest`, `vA.B.C` | Alpine uploader with TLS certificates, timezone data, and BaiduPCS-Go copied from a resolved personal image digest |
 | `latest-uploader`, `vA.B.C-uploader` | Uploader aliases |
 | `latest-importer`, `vA.B.C-importer` | Minimal static scratch importer |
 
-Build stages run on the builder platform and cross-compile using `TARGETOS`/`TARGETARCH`. QEMU is configured before buildx for runtime package installation; each target has its own GitHub Actions cache. Images include an OCI source label linking to their repository.
+Build stages run on the builder platform and cross-compile using `TARGETOS`/`TARGETARCH`. The uploader copies `/usr/local/bin/BaiduPCS-Go` from `ghcr.io/kyxie/baidupcs-go` for its target platform. Publish its multi-platform image from the `actions` repository before the first ingest build. QEMU is configured before buildx for runtime package installation; each target has its own GitHub Actions cache. Images include an OCI source label linking to their repository.
 
 After publishing images and preparing every host directory (including the card mount root below), pull images and authorize BaiduPCS-Go interactively:
 
@@ -47,6 +47,24 @@ Update the N100 after future releases with:
 ```sh
 docker compose pull && docker compose up -d
 ```
+
+## Automatic updates
+
+The `actions` repository checks upstream stable releases daily at 10:00 UTC and builds `ghcr.io/kyxie/baidupcs-go` for amd64 and arm64. Ingest checks that image every six hours at minute 23. A changed digest triggers verification and publication of uploader `latest` and `latest-uploader`; existing release tags and importer images are preserved. Tag releases also use the current dependency digest. The workflow validates both platforms and pins that digest for the entire build, so a concurrent `latest` update cannot mix dependency versions. No cross-repository token is needed; both images must be publicly readable.
+
+Successful builds are recorded in the GitHub Actions cache. A failed build is retried on the next check; eviction of a success marker can cause a harmless rebuild. GitHub schedules may be delayed, and scheduled workflows must be enabled on each repository's default branch. An inactive public repository may have schedules disabled by GitHub. The checker in `actions` records a release only after its image was successfully published.
+
+On the N100, keep `IMAGE_TAG=latest` and install the timer after the initial deployment. The checkout is assumed to live at `/opt/ingest`; if yours differs, use `sudo systemctl edit ingest-update.service` to override `[Service]` / `WorkingDirectory=` before enabling the timer. All bind-mounted media, state, account files, and `.env` stay on the host.
+
+```sh
+sudo install -m 0644 deploy/ingest-update.service deploy/ingest-update.timer /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now ingest-update.timer
+```
+
+The timer checks five minutes after boot and every fifteen minutes after each run. It pulls images before running Compose; a failed pull leaves the running containers alone. Compose replaces containers whose images changed, so active uploads may be interrupted and retried from their durable receipts. The update does not run a real Baidu login/upload smoke test. The full chain normally takes up to one daily upstream check, one six-hour image check, builds, and one fifteen-minute host check.
+
+Inspect updates with `journalctl -u ingest-update.service` and `systemctl list-timers ingest-update.timer`. Retry an ingest build with **Run workflow** on `ingest-builder` from `main`. Disable host updates with `sudo systemctl disable --now ingest-update.timer`; to pin a release, also set `IMAGE_TAG=vA.B.C` in `.env`. GitHub Actions automatically rebuilds the current default-branch uploader source, so only merge code ready for production.
 
 ## Read-only card mounts
 

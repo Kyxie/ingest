@@ -1,4 +1,5 @@
 # syntax=docker/dockerfile:1
+ARG PCS_IMAGE=ghcr.io/kyxie/baidupcs-go:v4.0.2
 FROM --platform=$BUILDPLATFORM golang:1.27.4-bookworm AS go-base
 WORKDIR /src
 COPY go.mod ./
@@ -21,14 +22,7 @@ ARG TARGETARCH
 RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH \
     go build -trimpath -ldflags='-s -w' -o /out/ingest ./cmd/ingest
 
-FROM --platform=$BUILDPLATFORM golang:1.27.4-bookworm AS pcsbuild
-ARG PCS_VERSION=v4.0.2
-ARG TARGETOS
-ARG TARGETARCH
-RUN git clone --depth 1 --branch "$PCS_VERSION" https://github.com/qjfoidnh/BaiduPCS-Go.git /pcs
-WORKDIR /pcs
-RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH \
-    go build -trimpath -ldflags='-s -w' -o /out/BaiduPCS-Go .
+FROM ${PCS_IMAGE} AS pcs
 
 FROM alpine:3.24 AS runtime
 RUN apk add --no-cache ca-certificates tzdata
@@ -40,6 +34,6 @@ CMD ["scan"]
 
 FROM runtime AS uploader
 COPY --from=build /out/ingest /ingest
-COPY --from=pcsbuild /out/BaiduPCS-Go /usr/local/bin/BaiduPCS-Go
+COPY --from=pcs /usr/local/bin/BaiduPCS-Go /usr/local/bin/BaiduPCS-Go
 ENTRYPOINT ["/ingest"]
 CMD ["upload"]

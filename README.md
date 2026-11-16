@@ -26,7 +26,7 @@ Install Docker with Compose and `just`. Go runs inside Docker; no host Go instal
 
 Copy `.env.example` to `.env` and `config.example.json` to `config.json`. Set `MEDIA_ROOT` to an existing HDD directory; create SSD state/session directories owned by `INGEST_UID:INGEST_GID`. Install the optional read-only card-mount units, authorize with `just pcs-login`, then run `just prod-run`. See [deployment](docs/deployment.md) for full setup.
 
-Only semantic version tag pushes trigger `.github/workflows/ingest-builder.yml`. CI verifies the project and publishes `linux/amd64` and `linux/arm64` images to GHCR using `GITHUB_TOKEN`; no registry secret is required. The uploader uses `latest` / `vA.B.C`; the importer uses `latest-importer` / `vA.B.C-importer`. Make the GHCR package public for anonymous N100 pulls; private packages require a token with `read:packages`.
+Semantic version tag pushes verify and publish both `linux/amd64` and `linux/arm64` images to GHCR using `GITHUB_TOKEN`. The builder also checks `ghcr.io/kyxie/baidupcs-go:latest` every six hours and rebuilds the uploader when its digest changes. Each build pins the resolved dependency digest. The uploader uses `latest` / `vA.B.C`; the importer uses `latest-importer` / `vA.B.C-importer`. Automatic dependency updates change only uploader `latest` aliases. Make both GHCR packages public for anonymous pulls. See [deployment](docs/deployment.md#automatic-updates) for the N100 update timer.
 
 ## Details
 
