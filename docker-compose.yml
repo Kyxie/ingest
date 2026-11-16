@@ -1,0 +1,64 @@
+name: ingest
+
+services:
+  importer:
+    image: ${IMAGE_REPOSITORY:-ghcr.io/kyxie/ingest}:${IMAGE_TAG:-latest}-importer
+    user: "${INGEST_UID:-1000}:${INGEST_GID:-1000}"
+    restart: unless-stopped
+    mem_limit: 256m
+    command: ["scan", "--config", "/etc/ingest/config.json"]
+    volumes:
+      - type: bind
+        source: ${CONFIG_PATH:-./config.json}
+        target: /etc/ingest/config.json
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${CARDS_ROOT:-/run/ingest/cards}
+        target: /cards
+        read_only: true
+        bind:
+          propagation: rslave
+          create_host_path: false
+      - type: bind
+        source: ${MEDIA_ROOT:?Set MEDIA_ROOT to an existing HDD directory in .env}
+        target: /media
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${STATE_ROOT:-./data/state}
+        target: /state
+        bind:
+          create_host_path: false
+
+  uploader:
+    image: ${IMAGE_REPOSITORY:-ghcr.io/kyxie/ingest}:${IMAGE_TAG:-latest}
+    user: "${INGEST_UID:-1000}:${INGEST_GID:-1000}"
+    restart: unless-stopped
+    mem_limit: 512m
+    command: ["upload", "--config", "/etc/ingest/config.json"]
+    environment:
+      BAIDUPCS_GO_CONFIG_DIR: /pcs
+    volumes:
+      - type: bind
+        source: ${CONFIG_PATH:-./config.json}
+        target: /etc/ingest/config.json
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${MEDIA_ROOT:?Set MEDIA_ROOT to an existing HDD directory in .env}
+        target: /media
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${STATE_ROOT:-./data/state}
+        target: /state
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${PCS_CONFIG_ROOT:-./data/pcs}
+        target: /pcs
+        bind:
+          create_host_path: false

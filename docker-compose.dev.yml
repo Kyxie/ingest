@@ -1,0 +1,27 @@
+name: ingest-dev
+
+services:
+  importer:
+    build:
+      context: .
+      target: dev
+    restart: unless-stopped
+    mem_limit: 1g
+    working_dir: /src
+    volumes:
+      - ./cmd:/src/cmd:ro
+      - ./internal:/src/internal:ro
+      - ./go.mod:/src/go.mod:ro
+      - ./.air.toml:/src/.air.toml:ro
+      - ./data-dev/cards:/cards:ro
+      - ./data-dev/media:/media
+      - ./data-dev/state:/state
+      - ./deploy/config.dev.json:/etc/ingest/config.json:ro
+      - go_mod_cache:/go/pkg/mod
+      - go_build_cache:/root/.cache/go-build
+      - go_tmp:/src/tmp
+
+volumes:
+  go_mod_cache:
+  go_build_cache:
+  go_tmp:

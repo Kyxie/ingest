@@ -1,0 +1,14 @@
+{
+  "sources": "/cards",
+  "target": "/media",
+  "state": "/state",
+  "require_mount": false,
+  "poll_seconds": 2,
+  "stable_seconds": 1,
+  "retention_days": 90,
+  "auto_prune": false,
+  "remote": "/ingest-development-unused",
+  "pcs": "BaiduPCS-Go",
+  "verify_download": true,
+  "upload_timeout_minutes": 1440
+}

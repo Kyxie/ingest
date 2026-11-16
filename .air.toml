@@ -1,0 +1,16 @@
+root = "."
+tmp_dir = "tmp"
+env_files = []
+
+[build]
+cmd = "CGO_ENABLED=0 go build -o ./tmp/ingest ./cmd/ingest"
+entrypoint = ["./tmp/ingest", "scan", "--config", "/etc/ingest/config.json"]
+include_ext = ["go"]
+exclude_dir = ["tmp", "data", "data-dev", ".git", ".agents", ".aws", ".codex"]
+delay = 500
+stop_on_error = true
+send_interrupt = true
+kill_delay = "5s"
+
+[misc]
+clean_on_exit = true

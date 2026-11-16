@@ -3,3 +3,13 @@
 coverage*
 pcs_config.json
 .ddns_go_config.yaml
+.env
+.env.*
+!.env.example
+/config.json
+/data/
+/data-dev/
+/tmp/
+/dist/
+/build/
+node_modules/
