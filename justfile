@@ -45,6 +45,10 @@ pcs-login:
 pcs-upload device project *flags:
     bash scripts/host-project.sh "$@"
 
+# Safely unmount the mounted SD card on the miniPC before unplugging it.
+eject partition="":
+    bash scripts/eject-card.sh ${1:+"$1"}
+
 # Mark a batch as no longer needed by any share before retention cleanup.
 batch-release batch:
     docker compose -f docker-compose.yml run --rm --no-deps importer release --config /etc/ingest/config.json --batch "$1"

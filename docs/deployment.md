@@ -82,6 +82,8 @@ sudo udevadm control --reload-rules
 
 Then reinsert a card. The rule selects removable FAT/exFAT partitions. The helper refuses fixed disks, refuses a second mount, and mounts read-only with nodev/nosuid/noexec, UID/GID 1000 and restrictive file masks at `/run/ingest/cards/<device>`. Readers that don't report `removable=1` won't trigger this rule: inspect `udevadm info`/`lsblk` on that host before adapting it. A desktop automounter must not mount the card first. The agent does not install host units during development or verification.
 
+To remove a card, wait for the import to finish, then run `just eject` from a persistent checkout of this repository on the miniPC. It finds the single mounted card and stops its `ingest-card@` service. Only unplug the reader after it prints `Safe to remove`. If more than one card is mounted, use `just eject sdc1` with the partition name shown by `lsblk`; the name can change after reinsertion. A checkout under `/tmp` disappears after reboot, so keep the repository under your home directory if you want to use this recipe later. The command never clears the card or the imported files.
+
 Mount `/run/ingest/cards` into the importer using a **bind with rslave propagation**. The host parent is made rshared by the service; otherwise cards inserted after the container starts remain invisible. Never give the importer privileged mode, host Docker socket, or raw block devices. Only the host helper needs mount privileges. The optional units and hotplug behavior require verification on your real reader; file-based unit tests cannot validate physical hardware.
 
 
