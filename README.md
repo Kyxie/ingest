@@ -1,8 +1,8 @@
 # ingest
 
-A headless Go service for an N100 Linux host: copy camera cards to an HDD, verify every copy, expose JPEG/video hardlinks for sharing, and archive selected originals to Baidu Netdisk.
+A headless Go service for an N100 Linux host: copy camera cards to an HDD, verify every copy, and publish read-only views for File Browser. Upload curated projects to Baidu Netdisk on demand.
 
-Deployment uses Docker Compose because physical cards and large media require local storage. The project uses the Go standard library, with no frontend or external database server. Nikon Z fc and DJI Action 4 cards with DCIM are the initial targets. Batch names use import time in UTC.
+The project uses the Go standard library, with no frontend or external database server. Nikon Z fc gets a view with a local timestamp and separate `raw/` and `jpg/` folders. Other DCIM cards use generic import rules. The Swarm Share stack uses manual project uploads; standalone Compose also supports the existing automatic archive workflow.
 
 ## Commands
 
@@ -18,6 +18,7 @@ Install Docker with Compose and `just`. Go runs inside Docker; no host Go instal
 | `just prod-run` / `just prod-stop` | Start/stop production using `.env` |
 | `just prod-logs [svc]` | Follow production logs |
 | `just pcs-login` | Authorize the production BaiduPCS-Go session interactively |
+| `just pcs-upload DEVICE PROJECT [--apply] [--merge]` | Preview or upload a curated project on the Swarm host |
 | `just batch-release BATCH_ID` / `just prune` | Release a batch from sharing / run retention cleanup |
 | `just release` / `just minor` / `just major` | Publish a patch/minor/major tag and its commits |
 | `just clean` | Remove development containers/caches and local images; preserve media/state |

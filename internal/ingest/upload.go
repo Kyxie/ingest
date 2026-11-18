@@ -90,9 +90,13 @@ func (e *Engine) uploadFile(parent context.Context, b Batch, f File) error {
 	if !e.Config.VerifyDownload {
 		return nil
 	}
+	return e.verifyRemote(ctx, remote, f)
+}
+
+func (e *Engine) verifyRemote(ctx context.Context, remote string, f File) error {
 	// Keep large readback files on the HDD, never on the container writable layer or SSD.
 	verifyDir := filepath.Join(e.Config.Target, ".verify")
-	if err = os.MkdirAll(verifyDir, 0700); err != nil {
+	if err := os.MkdirAll(verifyDir, 0700); err != nil {
 		return err
 	}
 	dir, err := os.MkdirTemp(verifyDir, "readback-")
@@ -100,7 +104,7 @@ func (e *Engine) uploadFile(parent context.Context, b Batch, f File) error {
 		return err
 	}
 	defer os.RemoveAll(dir)
-	if err = e.command(ctx, "download", "--saveto", dir, "--nocheck", remote); err != nil {
+	if err := e.command(ctx, "download", "--saveto", dir, "--nocheck", remote); err != nil {
 		return err
 	}
 	p := filepath.Join(dir, path.Base(remote))
@@ -111,7 +115,7 @@ func (e *Engine) uploadFile(parent context.Context, b Batch, f File) error {
 	if info.Size() != f.Size {
 		return fmt.Errorf("remote readback size mismatch")
 	}
-	sum, err = digest(ctx, p)
+	sum, err := digest(ctx, p)
 	if err != nil {
 		return err
 	}

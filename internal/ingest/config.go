@@ -6,23 +6,27 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
+	_ "time/tzdata"
 )
 
 type Config struct {
-	Sources              string   `json:"sources"`
-	Target               string   `json:"target"`
-	State                string   `json:"state"`
-	RequireMount         bool     `json:"require_mount"`
-	PollSeconds          int      `json:"poll_seconds"`
-	StableSeconds        int      `json:"stable_seconds"`
-	RetentionDays        int      `json:"retention_days"`
-	Remote               string   `json:"remote"`
-	PCS                  string   `json:"pcs"`
-	VerifyDownload       bool     `json:"verify_download"`
-	UploadTimeoutMinutes int      `json:"upload_timeout_minutes"`
-	AutoPrune            bool     `json:"auto_prune"`
-	RawExtensions        []string `json:"raw_extensions"`
-	ProxyExtensions      []string `json:"proxy_extensions"`
+	Sources              string            `json:"sources"`
+	Target               string            `json:"target"`
+	State                string            `json:"state"`
+	RequireMount         bool              `json:"require_mount"`
+	PollSeconds          int               `json:"poll_seconds"`
+	StableSeconds        int               `json:"stable_seconds"`
+	RetentionDays        int               `json:"retention_days"`
+	Remote               string            `json:"remote"`
+	PCS                  string            `json:"pcs"`
+	VerifyDownload       bool              `json:"verify_download"`
+	UploadTimeoutMinutes int               `json:"upload_timeout_minutes"`
+	AutoPrune            bool              `json:"auto_prune"`
+	RawExtensions        []string          `json:"raw_extensions"`
+	ProxyExtensions      []string          `json:"proxy_extensions"`
+	ImportTimezone       string            `json:"import_timezone"`
+	ProjectRemotes       map[string]string `json:"project_remotes"`
 }
 
 func Load(p string) (Config, error) {
@@ -63,6 +67,9 @@ func (c *Config) validate() error {
 	}
 	if c.UploadTimeoutMinutes < 1 {
 		c.UploadTimeoutMinutes = 1440
+	}
+	if _, err := time.LoadLocation(c.ImportTimezone); err != nil {
+		return fmt.Errorf("invalid import timezone: %w", err)
 	}
 	if c.PCS == "" {
 		c.PCS = "BaiduPCS-Go"

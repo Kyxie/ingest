@@ -41,6 +41,10 @@ prod-logs svc="":
 pcs-login:
     docker compose -f docker-compose.yml run --rm --no-deps --entrypoint BaiduPCS-Go uploader login
 
+# Preview or apply a project upload on the Swarm host.
+pcs-upload device project *flags:
+    bash scripts/host-project.sh "$@"
+
 # Mark a batch as no longer needed by any share before retention cleanup.
 batch-release batch:
     docker compose -f docker-compose.yml run --rm --no-deps importer release --config /etc/ingest/config.json --batch "$1"

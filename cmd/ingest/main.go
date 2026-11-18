@@ -4,12 +4,13 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"github.com/Kyxie/ingest/internal/ingest"
 	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
+
+	"github.com/Kyxie/ingest/internal/ingest"
 )
 
 func main() {
@@ -23,8 +24,12 @@ func run() error {
 	cfg := fs.String("config", "/etc/ingest/config.json", "configuration file")
 	once := fs.Bool("once", false, "run one cycle")
 	batch := fs.String("batch", "", "batch ID to release")
+	device := fs.String("device", "", "device key for a project upload")
+	project := fs.String("project", "", "project directory name")
+	apply := fs.Bool("apply", false, "upload after previewing the project")
+	merge := fs.Bool("merge", false, "allow an existing remote project directory")
 	if len(os.Args) < 2 {
-		return fmt.Errorf("usage: ingest scan|upload|release|prune --config PATH [--once] [--batch ID]")
+		return fmt.Errorf("usage: ingest scan|upload|project-upload|publish-nikon|release|prune --config PATH")
 	}
 	mode := os.Args[1]
 	if err := fs.Parse(os.Args[2:]); err != nil {
@@ -44,6 +49,10 @@ func run() error {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 	switch mode {
+	case "project-upload":
+		return e.UploadProject(ctx, *device, *project, *apply, *merge, os.Stdout)
+	case "publish-nikon":
+		return e.PublishNikon(ctx, *batch)
 	case "release":
 		return e.Release(*batch)
 	case "prune":

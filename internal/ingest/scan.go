@@ -57,7 +57,7 @@ func (e *Engine) Scan(ctx context.Context) error {
 			errs = append(errs, fmt.Errorf("%s: %w", entry.Name(), err))
 		}
 	}
-	for root := range e.seen {
+	for root := range e.observed {
 		if !present[root] {
 			delete(e.seen, root)
 			delete(e.observed, root)
@@ -129,9 +129,12 @@ func (e *Engine) scanCard(ctx context.Context, root string) error {
 	if e.observed == nil {
 		e.observed = map[string]observation{}
 	}
-	obs, ok := e.observed[root]
-	if !ok || obs.Stamp != stamp {
-		obs = observation{Stamp: stamp, Since: time.Now()}
+	obs := e.observed[root]
+	if obs.FirstSeen.IsZero() {
+		obs.FirstSeen = time.Now()
+	}
+	if obs.Stamp != stamp {
+		obs.Stamp, obs.Since = stamp, time.Now()
 		e.observed[root] = obs
 	}
 	if time.Since(obs.Since) < time.Duration(e.Config.StableSeconds)*time.Second {
@@ -213,10 +216,20 @@ func (e *Engine) scanCard(ctx context.Context, root string) error {
 	}
 	k := hex.EncodeToString(key.Sum(nil))
 	b := Batch{ID: time.Now().UTC().Format("20060102t150405") + "-" + k[:16], Key: k, Source: filepath.Base(root), Created: time.Now().UTC(), Files: pending}
+	resuming := false
 	for _, old := range bs {
 		if !old.Complete && old.Key == k {
 			b = old
+			resuming = true
 			break
+		}
+	}
+	if !resuming && isNikonZfc(root, files) {
+		if err = e.classifyNikon(&b, bs, obs.FirstSeen); err != nil {
+			return err
+		}
+		for i := range b.Files {
+			b.Files[i].Share = false
 		}
 	}
 	if err = writeJSON(e.manifest(b.ID), b); err != nil {
@@ -232,12 +245,8 @@ func (e *Engine) scanCard(ctx context.Context, root string) error {
 		}
 	}
 	// Publish shares only after every original has passed readback verification.
-	for _, f := range b.Files {
-		if f.Share {
-			if err = shareLink(e.original(b.ID, f.Path), e.shared(b.ID, f.Path)); err != nil {
-				return err
-			}
-		}
+	if err = e.publishShares(b); err != nil {
+		return err
 	}
 	b.Complete = true
 	if err = writeJSON(e.manifest(b.ID), b); err != nil {

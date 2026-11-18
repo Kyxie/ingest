@@ -55,7 +55,7 @@ func (e *Engine) Prune(ctx context.Context) error {
 		}
 		// Validate the entire batch before removing anything. Remove only inventoried paths.
 		for _, f := range b.Files {
-			for _, p := range []string{e.original(b.ID, f.Path), e.shared(b.ID, f.Path)} {
+			for _, p := range append(e.sharePaths(b, f), e.original(b.ID, f.Path)) {
 				if _, err := os.Lstat(p); os.IsNotExist(err) {
 					continue
 				} else if err != nil {
@@ -71,7 +71,7 @@ func (e *Engine) Prune(ctx context.Context) error {
 			}
 		}
 		for _, f := range b.Files {
-			for _, p := range []string{e.shared(b.ID, f.Path), e.original(b.ID, f.Path)} {
+			for _, p := range append(e.sharePaths(b, f), e.original(b.ID, f.Path)) {
 				if err := os.Remove(p); err != nil && !os.IsNotExist(err) {
 					return err
 				}

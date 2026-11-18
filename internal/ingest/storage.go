@@ -20,6 +20,7 @@ type File struct {
 	Modified time.Time `json:"modified"`
 	Archive  bool      `json:"archive"`
 	Share    bool      `json:"share"`
+	View     string    `json:"view,omitempty"`
 }
 type Batch struct {
 	ID       string    `json:"id"`
@@ -29,6 +30,7 @@ type Batch struct {
 	Complete bool      `json:"complete"`
 	Pruned   bool      `json:"pruned"`
 	Files    []File    `json:"files"`
+	View     string    `json:"view,omitempty"`
 }
 type Receipt struct {
 	Verified  map[string]string `json:"verified"`
@@ -37,8 +39,9 @@ type Receipt struct {
 	Updated   time.Time         `json:"updated"`
 }
 type observation struct {
-	Stamp string
-	Since time.Time
+	Stamp     string
+	Since     time.Time
+	FirstSeen time.Time
 }
 type Engine struct {
 	observed map[string]observation
@@ -62,6 +65,16 @@ func (e *Engine) original(id, p string) string {
 }
 func (e *Engine) shared(id, p string) string {
 	return filepath.Join(e.Config.Target, "shared", "imports", id, p)
+}
+func (e *Engine) sharePaths(b Batch, f File) []string {
+	var paths []string
+	if f.Share {
+		paths = append(paths, e.shared(b.ID, f.Path))
+	}
+	if f.View != "" {
+		paths = append(paths, e.shared(b.View, f.View))
+	}
+	return paths
 }
 func (e *Engine) manifest(id string) string {
 	return filepath.Join(e.Config.State, "batches", id+".json")
@@ -94,12 +107,15 @@ func (e *Engine) Batches() ([]Batch, error) {
 		if err = readJSON(filepath.Join(e.Config.State, "batches", v.Name()), &b); err != nil {
 			return nil, err
 		}
-		if !validID(b.ID) || v.Name() != b.ID+".json" {
+		if !validID(b.ID) || v.Name() != b.ID+".json" || (b.View != "" && !validID(b.View)) {
 			return nil, fmt.Errorf("invalid batch ID")
 		}
 		for _, f := range b.Files {
 			if !filepath.IsLocal(f.Path) || f.Path == "." {
 				return nil, fmt.Errorf("invalid batch file path")
+			}
+			if f.View != "" && (b.View == "" || !validViewPath(f.View)) {
+				return nil, fmt.Errorf("invalid batch view path")
 			}
 		}
 		out = append(out, b)

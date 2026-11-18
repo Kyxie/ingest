@@ -1,0 +1,6 @@
+{
+  "sources": "/cards",
+  "target": "/media",
+  "state": "/state",
+  "project_remotes": {}
+}
