@@ -35,6 +35,10 @@ func validViewPath(p string) bool {
 	return filepath.IsLocal(p) && (dir == "raw" || dir == "jpg") && name != "." && filepath.Join(dir, name) == p
 }
 
+func validStoredPath(p string) bool {
+	return validViewPath(p) || (filepath.IsLocal(p) && filepath.Dir(p) == "other" && filepath.Join("other", filepath.Base(p)) == p)
+}
+
 func (e *Engine) classifyNikon(b *Batch, batches []Batch, firstSeen time.Time) error {
 	used := map[string]bool{}
 	for _, candidate := range batches {
@@ -56,9 +60,16 @@ func (e *Engine) classifyNikon(b *Batch, batches []Batch, firstSeen time.Time) e
 			return err
 		}
 	}
+	for i, name := range nikonPaths(b.Files, false) {
+		b.Files[i].View = name
+	}
+	return nil
+}
+
+func nikonPaths(files []File, includeOther bool) []string {
 	names := map[string]bool{}
-	for i := range b.Files {
-		f := &b.Files[i]
+	paths := make([]string, len(files))
+	for i, f := range files {
 		category := ""
 		switch strings.ToLower(filepath.Ext(f.Path)) {
 		case ".nef":
@@ -66,7 +77,10 @@ func (e *Engine) classifyNikon(b *Batch, batches []Batch, firstSeen time.Time) e
 		case ".jpg", ".jpeg":
 			category = "jpg"
 		default:
-			continue
+			if !includeOther {
+				continue
+			}
+			category = "other"
 		}
 		base := filepath.Base(f.Path)
 		ext := filepath.Ext(base)
@@ -75,18 +89,25 @@ func (e *Engine) classifyNikon(b *Batch, batches []Batch, firstSeen time.Time) e
 			key := strings.ToLower(p)
 			if !names[key] {
 				names[key] = true
-				f.View = p
+				paths[i] = p
 				break
 			}
 		}
 	}
-	return nil
+	return paths
 }
 
-func (e *Engine) publishShares(b Batch) error {
+func (e *Engine) publishShares(ctx context.Context, b Batch) error {
 	for _, f := range b.Files {
+		src := e.storedOriginal(b.ID, f)
 		for _, p := range e.sharePaths(b, f) {
-			if err := shareLink(e.original(b.ID, f.Path), p); err != nil {
+			var err error
+			if e.Config.EditableImports {
+				err = verifiedCopy(ctx, src, p, f)
+			} else {
+				err = shareLink(src, p)
+			}
+			if err != nil {
 				return err
 			}
 		}
@@ -101,6 +122,9 @@ func (e *Engine) PublishNikon(ctx context.Context, id string) error {
 		return err
 	}
 	defer unlock()
+	if err = e.prepareEditableImports(ctx); err != nil {
+		return err
+	}
 	batches, err := e.Batches()
 	if err != nil {
 		return err
@@ -113,7 +137,7 @@ func (e *Engine) PublishNikon(ctx context.Context, id string) error {
 			return fmt.Errorf("batch %q is not a complete Nikon Z fc batch", id)
 		}
 		for _, f := range b.Files {
-			sum, err := digest(ctx, e.original(id, f.Path))
+			sum, err := digest(ctx, e.storedOriginal(id, f))
 			if err != nil {
 				return err
 			}
@@ -129,7 +153,13 @@ func (e *Engine) PublishNikon(ctx context.Context, id string) error {
 				return err
 			}
 		}
-		return e.publishShares(b)
+		if e.Config.EditableImports {
+			// Curation may have moved legacy share paths since the original import.
+			for i := range b.Files {
+				b.Files[i].Share = false
+			}
+		}
+		return e.publishShares(ctx, b)
 	}
 	return fmt.Errorf("batch %q not found", id)
 }

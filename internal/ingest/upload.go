@@ -74,7 +74,7 @@ func (e *Engine) Upload(ctx context.Context) error {
 func (e *Engine) uploadFile(parent context.Context, b Batch, f File) error {
 	ctx, cancel := context.WithTimeout(parent, time.Duration(e.Config.UploadTimeoutMinutes)*time.Minute)
 	defer cancel()
-	local := e.original(b.ID, f.Path)
+	local := e.storedOriginal(b.ID, f)
 	sum, err := digest(ctx, local)
 	if err != nil {
 		return err

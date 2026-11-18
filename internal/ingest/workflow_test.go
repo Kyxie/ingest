@@ -160,7 +160,7 @@ esac
 	if err := os.MkdirAll(filepath.Join(remote, "Camera Files", "Nikon Zfc"), 0755); err != nil {
 		t.Fatal(err)
 	}
-	project := filepath.Join(c.Target, "shared", "projects", "2026 青岛")
+	project := filepath.Join(c.Target, "shared", "imports", "2026 青岛")
 	if err := os.MkdirAll(filepath.Join(project, "raw"), 0755); err != nil {
 		t.Fatal(err)
 	}
@@ -206,5 +206,214 @@ esac
 	}
 	if err = e.UploadProject(ctx, "zfc", "2026 青岛", false, false, io.Discard); err == nil {
 		t.Fatal("preview accepted a symlink")
+	}
+}
+
+func TestEditableImportsProtectOriginals(t *testing.T) {
+	c, src := fixture(t)
+	const oldName = "DSC_3651.JPG"
+	put(t, filepath.Join(src, oldName), "old photo")
+	legacy, err := New(c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	if err = legacy.Scan(ctx); err != nil {
+		t.Fatal(err)
+	}
+	batches, err := legacy.Batches()
+	if err != nil || len(batches) != 1 {
+		t.Fatalf("legacy batches: %v %v", batches, err)
+	}
+	b := batches[0]
+	oldPath := filepath.Join("DCIM", "100NIKON", oldName)
+	original := legacy.original(b.ID, oldPath)
+	link := legacy.shared(b.ID, oldPath)
+	a, err := os.Stat(original)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, err := os.Stat(link)
+	if err != nil || !os.SameFile(a, s) {
+		t.Fatal("expected an existing hardlinked import")
+	}
+	c.EditableImports = true
+	e, err := New(c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	const newName = "DSC_3652.JPG"
+	put(t, filepath.Join(src, newName), "new photo")
+	if err = e.Scan(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(c.Target, "shared", ".imports-editable-v1")); err != nil {
+		t.Fatal(err)
+	}
+	put(t, link, "edited old photo")
+	if data, err := os.ReadFile(original); err != nil || string(data) != "old photo" {
+		t.Fatalf("legacy original changed: %q %v", data, err)
+	}
+	batches, err = e.Batches()
+	if err != nil || len(batches) != 2 {
+		t.Fatalf("new batches: %v %v", batches, err)
+	}
+	for _, newest := range batches {
+		if newest.ID == b.ID {
+			continue
+		}
+		f := newest.Files[0]
+		put(t, e.shared(newest.ID, f.Path), "edited new photo")
+		if data, err := os.ReadFile(e.original(newest.ID, f.Path)); err != nil || string(data) != "new photo" {
+			t.Fatalf("new original changed: %q %v", data, err)
+		}
+	}
+	organized := e.shared("2026 青岛", oldName)
+	if err := os.MkdirAll(filepath.Dir(organized), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Rename(link, organized); err != nil {
+		t.Fatal(err)
+	}
+	c.EditableImports = false
+	restarted, err := New(c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := restarted.Scan(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(link); !os.IsNotExist(err) {
+		t.Fatalf("scan recreated the moved file: %v", err)
+	}
+	// Pruning a released old archive must leave the editable copy intact.
+	b.Created = time.Now().Add(-120 * 24 * time.Hour)
+	if err := writeJSON(e.manifest(b.ID), b); err != nil {
+		t.Fatal(err)
+	}
+	if err := writeJSON(e.receipt(b.ID), Receipt{Verified: map[string]string{oldPath: b.Files[0].SHA256}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.Release(b.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := restarted.Prune(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(original); !os.IsNotExist(err) {
+		t.Fatalf("released original still present: %v", err)
+	}
+	if data, err := os.ReadFile(organized); err != nil || string(data) != "edited old photo" {
+		t.Fatalf("editable copy was changed by prune: %q %v", data, err)
+	}
+}
+
+func TestNikonArchiveOnlyKeepsCardPathsInManifest(t *testing.T) {
+	c, src := fixture(t)
+	c.ArchiveOnly = true
+	nikon := filepath.Join(filepath.Dir(src), "102NZ_FC")
+	if err := os.Rename(src, nikon); err != nil {
+		t.Fatal(err)
+	}
+	files := map[string]string{"DSC_3651.NEF": "negative", "DSC_3651.JPG": "photo", "NC_FLLST.DAT": "index"}
+	for name, data := range files {
+		put(t, filepath.Join(nikon, name), data)
+	}
+	ctx := context.Background()
+	e, err := New(c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = e.Scan(ctx); err != nil {
+		t.Fatal(err)
+	}
+	batches, err := e.Batches()
+	if err != nil || len(batches) != 1 {
+		t.Fatalf("batches: %v %v", batches, err)
+	}
+	b := batches[0]
+	for card, stored := range map[string]string{
+		"DSC_3651.NEF": "raw/DSC_3651.NEF",
+		"DSC_3651.JPG": "jpg/DSC_3651.JPG",
+		"NC_FLLST.DAT": "other/NC_FLLST.DAT",
+	} {
+		data, err := os.ReadFile(e.original(b.ID, stored))
+		if err != nil || string(data) != files[card] {
+			t.Fatalf("archive %s: %q %v", stored, data, err)
+		}
+	}
+	for _, f := range b.Files {
+		if filepath.Dir(f.Path) != "DCIM/102NZ_FC" || f.Stored == "" {
+			t.Fatalf("card path or archive path missing: %+v", f)
+		}
+	}
+	entries, err := os.ReadDir(e.shared(".", "."))
+	if err != nil || len(entries) != 0 {
+		t.Fatalf("auto-published share files: %v %v", entries, err)
+	}
+	e, err = New(c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = e.Scan(ctx); err != nil {
+		t.Fatal(err)
+	}
+	batches, err = e.Batches()
+	if err != nil || len(batches) != 1 {
+		t.Fatalf("duplicate batch after reinsertion: %v %v", batches, err)
+	}
+}
+
+func TestClassifyOriginalsMigratesLegacyNikonBatch(t *testing.T) {
+	c, src := fixture(t)
+	nikon := filepath.Join(filepath.Dir(src), "102NZ_FC")
+	if err := os.Rename(src, nikon); err != nil {
+		t.Fatal(err)
+	}
+	put(t, filepath.Join(nikon, "DSC_3651.NEF"), "negative")
+	put(t, filepath.Join(nikon, "DSC_3651.JPG"), "photo")
+	ctx := context.Background()
+	old, err := New(c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := old.Scan(ctx); err != nil {
+		t.Fatal(err)
+	}
+	batches, err := old.Batches()
+	if err != nil || len(batches) != 1 {
+		t.Fatalf("batches: %v %v", batches, err)
+	}
+	b := batches[0]
+	// Leave one target link as if a previous migration stopped before committing the manifest.
+	prior := old.original(b.ID, "DCIM/102NZ_FC/DSC_3651.NEF")
+	if err := shareLink(prior, old.original(b.ID, "raw/DSC_3651.NEF")); err != nil {
+		t.Fatal(err)
+	}
+	c.ArchiveOnly, c.EditableImports = true, true
+	e, err := New(c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 2; i++ {
+		if err := e.ClassifyOriginals(ctx, b.ID); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err = os.Stat(e.original(b.ID, "DCIM")); !os.IsNotExist(err) {
+		t.Fatalf("old archive tree remains: %v", err)
+	}
+	for child, want := range map[string]string{"raw/DSC_3651.NEF": "negative", "jpg/DSC_3651.JPG": "photo"} {
+		got, err := os.ReadFile(e.original(b.ID, child))
+		if err != nil || string(got) != want {
+			t.Fatalf("archive %s: %q %v", child, got, err)
+		}
+	}
+	if err := e.Scan(ctx); err != nil {
+		t.Fatal(err)
+	}
+	batches, err = e.Batches()
+	if err != nil || len(batches) != 1 {
+		t.Fatalf("duplicate batch after migration: %v %v", batches, err)
 	}
 }

@@ -125,7 +125,7 @@ func (e *Engine) UploadProject(ctx context.Context, device, project string, appl
 	if err != nil {
 		return err
 	}
-	root := filepath.Join(e.Config.Target, "shared", "projects", project)
+	root := e.shared(project, ".")
 	files, err := projectFiles(ctx, root)
 	if err != nil {
 		return err

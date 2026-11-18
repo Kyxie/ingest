@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 )
@@ -21,6 +22,7 @@ type File struct {
 	Archive  bool      `json:"archive"`
 	Share    bool      `json:"share"`
 	View     string    `json:"view,omitempty"`
+	Stored   string    `json:"stored,omitempty"`
 }
 type Batch struct {
 	ID       string    `json:"id"`
@@ -58,10 +60,23 @@ func New(c Config) (*Engine, error) {
 			return nil, err
 		}
 	}
-	return &Engine{Config: c}, nil
+	e := &Engine{Config: c}
+	// Once a library has editable imports, preserve that mode for all commands.
+	if ready, err := e.editableImportsReady(); err != nil {
+		return nil, err
+	} else if ready {
+		e.Config.EditableImports = true
+	}
+	return e, nil
 }
 func (e *Engine) original(id, p string) string {
 	return filepath.Join(e.Config.Target, "originals", id, p)
+}
+func (e *Engine) storedOriginal(id string, f File) string {
+	if f.Stored != "" {
+		return e.original(id, f.Stored)
+	}
+	return e.original(id, f.Path)
 }
 func (e *Engine) shared(id, p string) string {
 	return filepath.Join(e.Config.Target, "shared", "imports", id, p)
@@ -110,12 +125,20 @@ func (e *Engine) Batches() ([]Batch, error) {
 		if !validID(b.ID) || v.Name() != b.ID+".json" || (b.View != "" && !validID(b.View)) {
 			return nil, fmt.Errorf("invalid batch ID")
 		}
+		stored := make(map[string]bool)
 		for _, f := range b.Files {
 			if !filepath.IsLocal(f.Path) || f.Path == "." {
 				return nil, fmt.Errorf("invalid batch file path")
 			}
 			if f.View != "" && (b.View == "" || !validViewPath(f.View)) {
 				return nil, fmt.Errorf("invalid batch view path")
+			}
+			if f.Stored != "" {
+				key := strings.ToLower(f.Stored)
+				if !validStoredPath(f.Stored) || stored[key] {
+					return nil, fmt.Errorf("invalid or duplicate batch archive path")
+				}
+				stored[key] = true
 			}
 		}
 		out = append(out, b)

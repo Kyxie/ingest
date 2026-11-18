@@ -38,6 +38,9 @@ func (e *Engine) Scan(ctx context.Context) error {
 		return err
 	}
 	defer unlock()
+	if err = e.prepareEditableImports(ctx); err != nil {
+		return err
+	}
 	entries, err := os.ReadDir(e.Config.Sources)
 	if err != nil {
 		return err
@@ -153,6 +156,7 @@ func (e *Engine) scanCard(ctx context.Context, root string) error {
 	type previous struct {
 		ID     string
 		Pruned bool
+		File   File
 	}
 	known := map[string]previous{}
 	for _, b := range bs {
@@ -160,7 +164,7 @@ func (e *Engine) scanCard(ctx context.Context, root string) error {
 			continue
 		}
 		for _, f := range b.Files {
-			known[f.Path+"\x00"+f.SHA256] = previous{b.ID, b.Pruned}
+			known[f.Path+"\x00"+f.SHA256] = previous{b.ID, b.Pruned, f}
 		}
 	}
 	all := map[string]bool{}
@@ -187,7 +191,7 @@ func (e *Engine) scanCard(ctx context.Context, root string) error {
 	for _, f := range files {
 		if old, ok := known[f.Path+"\x00"+f.SHA256]; ok {
 			if !old.Pruned {
-				sum, err := digest(ctx, e.original(old.ID, f.Path))
+				sum, err := digest(ctx, e.storedOriginal(old.ID, old.File))
 				if err != nil {
 					return err
 				}
@@ -224,7 +228,19 @@ func (e *Engine) scanCard(ctx context.Context, root string) error {
 			break
 		}
 	}
-	if !resuming && isNikonZfc(root, files) {
+	if e.Config.ArchiveOnly {
+		// A pending batch must resume at the paths it already recorded.
+		if !resuming && isNikonZfc(root, files) {
+			for i, name := range nikonPaths(b.Files, true) {
+				b.Files[i].Stored = name
+			}
+		}
+		b.View = ""
+		for i := range b.Files {
+			b.Files[i].Share = false
+			b.Files[i].View = ""
+		}
+	} else if !resuming && isNikonZfc(root, files) {
 		if err = e.classifyNikon(&b, bs, obs.FirstSeen); err != nil {
 			return err
 		}
@@ -240,12 +256,12 @@ func (e *Engine) scanCard(ctx context.Context, root string) error {
 		if err = noSymlink(src); err != nil {
 			return err
 		}
-		if err = verifiedCopy(ctx, src, e.original(b.ID, f.Path), f); err != nil {
+		if err = verifiedCopy(ctx, src, e.storedOriginal(b.ID, f), f); err != nil {
 			return err
 		}
 	}
 	// Publish shares only after every original has passed readback verification.
-	if err = e.publishShares(b); err != nil {
+	if err = e.publishShares(ctx, b); err != nil {
 		return err
 	}
 	b.Complete = true

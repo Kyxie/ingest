@@ -25,6 +25,9 @@ func (e *Engine) Prune(ctx context.Context) error {
 		return err
 	}
 	defer unlock()
+	if err = e.prepareEditableImports(ctx); err != nil {
+		return err
+	}
 	bs, err := e.Batches()
 	if err != nil {
 		return err
@@ -55,7 +58,7 @@ func (e *Engine) Prune(ctx context.Context) error {
 		}
 		// Validate the entire batch before removing anything. Remove only inventoried paths.
 		for _, f := range b.Files {
-			for _, p := range append(e.sharePaths(b, f), e.original(b.ID, f.Path)) {
+			for _, p := range e.retentionPaths(b, f) {
 				if _, err := os.Lstat(p); os.IsNotExist(err) {
 					continue
 				} else if err != nil {
@@ -71,7 +74,7 @@ func (e *Engine) Prune(ctx context.Context) error {
 			}
 		}
 		for _, f := range b.Files {
-			for _, p := range append(e.sharePaths(b, f), e.original(b.ID, f.Path)) {
+			for _, p := range e.retentionPaths(b, f) {
 				if err := os.Remove(p); err != nil && !os.IsNotExist(err) {
 					return err
 				}
@@ -83,4 +86,11 @@ func (e *Engine) Prune(ctx context.Context) error {
 		}
 	}
 	return nil
+}
+
+func (e *Engine) retentionPaths(b Batch, f File) []string {
+	if e.Config.EditableImports {
+		return []string{e.storedOriginal(b.ID, f)}
+	}
+	return append(e.sharePaths(b, f), e.storedOriginal(b.ID, f))
 }

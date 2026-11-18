@@ -26,6 +26,8 @@ type Config struct {
 	RawExtensions        []string          `json:"raw_extensions"`
 	ProxyExtensions      []string          `json:"proxy_extensions"`
 	ImportTimezone       string            `json:"import_timezone"`
+	EditableImports      bool              `json:"editable_imports"`
+	ArchiveOnly          bool              `json:"archive_only"`
 	ProjectRemotes       map[string]string `json:"project_remotes"`
 }
 
