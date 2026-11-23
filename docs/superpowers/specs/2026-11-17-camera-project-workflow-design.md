@@ -1,5 +1,7 @@
 # Camera import, project curation, and manual upload
 
+> Superseded in part: the host upload command and card-eject recipe moved to the swarm repository as `just share-upload` and `just share-eject`, and ingest now publishes a single `vA.B.C` image.
+
 ## Workflow
 
 Ingest copies a mounted camera card to the HDD automatically. The owner keeps the archive and manually copies selected files from it into a named shared folder. The owner can rename files and create subdirectories in File Browser. A command on the miniPC uploads one selected folder to the configured Baidu Netdisk directory for the device chosen by the owner. The Share stack runs the importer and File Browser without a background uploader.

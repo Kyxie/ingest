@@ -1,6 +1,6 @@
 # N100 deployment
 
-The N100 runs the importer and uploader with Docker Compose. Keep configuration, manifests, and generated BaiduPCS-Go account state on the SSD; mount media and verification scratch space from the HDD.
+The miniPC runs ingest in the Swarm `share` stack of the [swarm](https://github.com/Kyxie/swarm) repository, which also owns the card mount units and host `just share-*` recipes. This page covers standalone Docker Compose, which runs the importer and uploader as two services from the same image. Keep configuration, manifests, and generated BaiduPCS-Go account state on the SSD; mount media and verification scratch space from the HDD.
 
 ## Configuration and permissions
 
@@ -22,15 +22,9 @@ Compose refuses missing bind paths instead of creating directories over a missin
 
 GHCR publication uses the workflow's built-in `GITHUB_TOKEN` with `packages: write`; no registry secret or Docker Hub credentials are needed. GHCR packages are private on first publication. Make the package public if the N100 should pull without signing in; otherwise sign in on the N100 with a GitHub token having `read:packages`.
 
-Run `just verify`, commit the intended changes, then explicitly release with `just release`, `just minor`, or `just major`. The tag workflow verifies the project and builds `linux/amd64,linux/arm64` images:
+Run `just verify`, commit the intended changes, then explicitly release with `just release`, `just minor`, or `just major`. The tag workflow verifies the project and builds one `linux/amd64,linux/arm64` image, tagged `vA.B.C` and `latest` under `ghcr.io/<github-user>/<project>`. It is Alpine with TLS certificates, timezone data, the ingest binary, and BaiduPCS-Go copied from a resolved personal image digest. The default command is `scan`; the uploader service overrides it with `upload`.
 
-| Tag under `ghcr.io/<github-user>/<project>` | Runtime |
-| --- | --- |
-| `latest`, `vA.B.C` | Alpine uploader with TLS certificates, timezone data, and BaiduPCS-Go copied from a resolved personal image digest |
-| `latest-uploader`, `vA.B.C-uploader` | Uploader aliases |
-| `latest-importer`, `vA.B.C-importer` | Minimal static scratch importer |
-
-Build stages run on the builder platform and cross-compile using `TARGETOS`/`TARGETARCH`. The uploader copies `/usr/local/bin/BaiduPCS-Go` from `ghcr.io/kyxie/baidupcs-go` for its target platform. Publish its multi-platform image from the `actions` repository before the first ingest build. QEMU is configured before buildx for runtime package installation; each target has its own GitHub Actions cache. Images include an OCI source label linking to their repository.
+Build stages run on the builder platform and cross-compile using `TARGETOS`/`TARGETARCH`. The image copies `/usr/local/bin/BaiduPCS-Go` from `ghcr.io/kyxie/baidupcs-go` for its target platform. Publish its multi-platform image from the `actions` repository before the first ingest build. QEMU is configured before buildx for runtime package installation. Images include an OCI source label linking to their repository.
 
 After publishing images and preparing every host directory (including the card mount root below), pull images and authorize BaiduPCS-Go interactively:
 
@@ -50,7 +44,7 @@ docker compose pull && docker compose up -d
 
 ## Automatic updates
 
-The `actions` repository checks upstream stable releases daily at 10:00 UTC and builds `ghcr.io/kyxie/baidupcs-go` for amd64 and arm64. Ingest checks that image every six hours at minute 23. A changed digest triggers verification and publication of uploader `latest` and `latest-uploader`; existing release tags and importer images are preserved. Tag releases also use the current dependency digest. The workflow validates both platforms and pins that digest for the entire build, so a concurrent `latest` update cannot mix dependency versions. No cross-repository token is needed; both images must be publicly readable.
+The `actions` repository checks upstream stable releases daily at 10:00 UTC and builds `ghcr.io/kyxie/baidupcs-go` for amd64 and arm64. Ingest checks that image every six hours at minute 23. A changed digest triggers verification and publication of `latest`; existing release tags are preserved. Tag releases also use the current dependency digest. The workflow validates both platforms and pins that digest for the entire build, so a concurrent `latest` update cannot mix dependency versions. No cross-repository token is needed; both images must be publicly readable.
 
 Successful builds are recorded in the GitHub Actions cache. A failed build is retried on the next check; eviction of a success marker can cause a harmless rebuild. GitHub schedules may be delayed, and scheduled workflows must be enabled on each repository's default branch. An inactive public repository may have schedules disabled by GitHub. The checker in `actions` records a release only after its image was successfully published.
 
@@ -64,25 +58,13 @@ sudo systemctl enable --now ingest-update.timer
 
 The timer checks five minutes after boot and every fifteen minutes after each run. It pulls images before running Compose; a failed pull leaves the running containers alone. Compose replaces containers whose images changed, so active uploads may be interrupted and retried from their durable receipts. The update does not run a real Baidu login/upload smoke test. The full chain normally takes up to one daily upstream check, one six-hour image check, builds, and one fifteen-minute host check.
 
-Inspect updates with `journalctl -u ingest-update.service` and `systemctl list-timers ingest-update.timer`. Retry an ingest build with **Run workflow** on `ingest-builder` from `main`. Disable host updates with `sudo systemctl disable --now ingest-update.timer`; to pin a release, also set `IMAGE_TAG=vA.B.C` in `.env`. GitHub Actions automatically rebuilds the current default-branch uploader source, so only merge code ready for production.
+Inspect updates with `journalctl -u ingest-update.service` and `systemctl list-timers ingest-update.timer`. Retry an ingest build with **Run workflow** on `ingest-builder` from `main`. Disable host updates with `sudo systemctl disable --now ingest-update.timer`; to pin a release, also set `IMAGE_TAG=vA.B.C` in `.env`. GitHub Actions automatically rebuilds `latest` from the current default branch, so only merge code ready for production.
 
 ## Read-only card mounts
 
-Docker does not mount new SD cards automatically. `deploy/` contains optional root-owned host setup for Linux/systemd. Read it before installing on the miniPC:
+Docker does not mount new SD cards automatically. The root-owned udev rule, mount helper, and systemd units live in the swarm repository under `stacks/share/host/`; install them with `just share-install-cards` and remove a card with `just share-eject` from a checkout of that repository.
 
-```sh
-sudo install -D -m 0755 deploy/ingest-card-mount /usr/local/libexec/ingest-card-mount
-sudo install -m 0644 deploy/ingest-mount-root.service /etc/systemd/system/
-sudo install -m 0644 deploy/ingest-card@.service /etc/systemd/system/
-sudo install -m 0644 deploy/90-ingest-card.rules /etc/udev/rules.d/
-sudo systemctl daemon-reload
-sudo systemctl enable --now ingest-mount-root.service
-sudo udevadm control --reload-rules
-```
-
-Then reinsert a card. The rule selects removable FAT/exFAT partitions. The helper refuses fixed disks, refuses a second mount, and mounts read-only with nodev/nosuid/noexec, UID/GID 1000 and restrictive file masks at `/run/ingest/cards/<device>`. Readers that don't report `removable=1` won't trigger this rule: inspect `udevadm info`/`lsblk` on that host before adapting it. A desktop automounter must not mount the card first. The agent does not install host units during development or verification.
-
-To remove a card, wait for the import to finish, then run `just eject` from a persistent checkout of this repository on the miniPC. It finds the single mounted card and stops its `ingest-card@` service. Only unplug the reader after it prints `Safe to remove`. If more than one card is mounted, use `just eject sdc1` with the partition name shown by `lsblk`; the name can change after reinsertion. A checkout under `/tmp` disappears after reboot, so keep the repository under your home directory if you want to use this recipe later. The command never clears the card or the imported files.
+The rule selects removable FAT/exFAT partitions. The helper refuses fixed disks, refuses a second mount, and mounts read-only with nodev/nosuid/noexec, UID/GID 1000 and restrictive file masks at `/run/ingest/cards/<device>`. Readers that don't report `removable=1` won't trigger this rule: inspect `udevadm info`/`lsblk` on that host before adapting it. A desktop automounter must not mount the card first. The agent does not install host units during development or verification.
 
 Mount `/run/ingest/cards` into the importer using a **bind with rslave propagation**. The host parent is made rshared by the service; otherwise cards inserted after the container starts remain invisible. Never give the importer privileged mode, host Docker socket, or raw block devices. Only the host helper needs mount privileges. The optional units and hotplug behavior require verification on your real reader; file-based unit tests cannot validate physical hardware.
 

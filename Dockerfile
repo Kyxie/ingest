@@ -26,14 +26,7 @@ FROM ${PCS_IMAGE} AS pcs
 
 FROM alpine:3.24 AS runtime
 RUN apk add --no-cache ca-certificates tzdata
-
-FROM scratch AS importer
-COPY --from=build /out/ingest /ingest
-ENTRYPOINT ["/ingest"]
-CMD ["scan"]
-
-FROM runtime AS uploader
 COPY --from=build /out/ingest /ingest
 COPY --from=pcs /usr/local/bin/BaiduPCS-Go /usr/local/bin/BaiduPCS-Go
 ENTRYPOINT ["/ingest"]
-CMD ["upload"]
+CMD ["scan"]

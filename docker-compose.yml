@@ -2,7 +2,7 @@ name: ingest
 
 services:
   importer:
-    image: ${IMAGE_REPOSITORY:-ghcr.io/kyxie/ingest}:${IMAGE_TAG:-latest}-importer
+    image: ${IMAGE_REPOSITORY:-ghcr.io/kyxie/ingest}:${IMAGE_TAG:-latest}
     user: "${INGEST_UID:-1000}:${INGEST_GID:-1000}"
     restart: unless-stopped
     mem_limit: 256m

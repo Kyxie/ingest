@@ -14,23 +14,24 @@ Install Docker with Compose and `just`. Go runs inside Docker; no host Go instal
 | `just dev` / `just dev-down` | Start/stop the isolated importer with hot reload |
 | `just logs [svc]` | Follow development logs |
 | `just verify` | Check formatting, vet, race tests, build, scripts, and Compose |
-| `just prod-build` | Build both production images as `local/ingest` |
-| `just prod-run` / `just prod-stop` | Start/stop production using `.env` |
+| `just prod-build` | Build the production image as `local/ingest:latest` |
+| `just prod-run` / `just prod-stop` | Start/stop standalone Compose production using `.env` |
 | `just prod-logs [svc]` | Follow production logs |
-| `just pcs-login` | Authorize the production BaiduPCS-Go session interactively |
-| `just pcs-upload DEVICE PROJECT [--apply] [--merge]` | Preview or upload a curated project on the Swarm host |
+| `just pcs-login` | Authorize the standalone BaiduPCS-Go session interactively |
 | `just batch-release BATCH_ID` / `just prune` | Release a batch from sharing / run retention cleanup |
 | `just release` / `just minor` / `just major` | Publish a patch/minor/major tag and its commits |
 | `just clean` | Remove development containers/caches and local images; preserve media/state |
 
 ## Deploy
 
-Copy `.env.example` to `.env` and `config.example.json` to `config.json`. Set `MEDIA_ROOT` to an existing HDD directory; create SSD state/session directories owned by `INGEST_UID:INGEST_GID`. Install the optional read-only card-mount units, authorize with `just pcs-login`, then run `just prod-run`. See [deployment](docs/deployment.md) for full setup.
+The miniPC runs ingest in the Swarm `share` stack of the [swarm](https://github.com/Kyxie/swarm) repository. That repository also owns the host-side card mount units and the `just share-*` recipes for Baidu login, project uploads, and card ejection, so the miniPC never needs a checkout of this repository.
 
-Semantic version tag pushes verify and publish both `linux/amd64` and `linux/arm64` images to GHCR using `GITHUB_TOKEN`. The builder also checks `ghcr.io/kyxie/baidupcs-go:latest` every six hours and rebuilds the uploader when its digest changes. Each build pins the resolved dependency digest. The uploader uses `latest` / `vA.B.C`; the importer uses `latest-importer` / `vA.B.C-importer`. Automatic dependency updates change only uploader `latest` aliases. Make both GHCR packages public for anonymous pulls. See [deployment](docs/deployment.md#automatic-updates) for the N100 update timer.
+Standalone Compose remains available: copy `.env.example` to `.env` and `config.example.json` to `config.json`, set `MEDIA_ROOT` to an existing HDD directory, create SSD state/session directories owned by `INGEST_UID:INGEST_GID`, authorize with `just pcs-login`, then run `just prod-run`. See [deployment](docs/deployment.md) for full setup.
+
+Semantic version tag pushes verify and publish one image for `linux/amd64` and `linux/arm64` to GHCR using `GITHUB_TOKEN`, tagged `vA.B.C` and `latest`. It contains the ingest binary and BaiduPCS-Go, so every command (`scan`, `upload`, `project-upload`, maintenance) uses the same image. The builder also checks `ghcr.io/kyxie/baidupcs-go:latest` every six hours and rebuilds `latest` when its digest changes; release tags are never rebuilt. Each build pins the resolved dependency digest. Make the GHCR package public for anonymous pulls. See [deployment](docs/deployment.md#automatic-updates) for the N100 update timer.
 
 ## Details
 
 - [Development and verification](docs/development.md): isolated fixtures, hot reload, image checks, and release behavior.
 - [Configuration and data safety](docs/configuration.md): storage layout, selection, verification, and retention.
-- [Deployment](docs/deployment.md): environment variables, disk permissions, Baidu login, and card mounts.
+- [Deployment](docs/deployment.md): standalone Compose environment variables, disk permissions, Baidu login, and card mount requirements.

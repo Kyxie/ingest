@@ -70,9 +70,6 @@ jobs:
     permissions:
       contents: read
       packages: write
-    strategy:
-      matrix:
-        target: ${{ fromJSON(github.event_name == 'push' && '["importer","uploader"]' || '["uploader"]') }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -94,22 +91,20 @@ jobs:
           labels: |
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
           tags: |
-            type=raw,value=latest-${{ matrix.target }}
-            type=raw,value=${{ github.ref_name }}-${{ matrix.target }},enable=${{ github.event_name == 'push' }}
-            type=raw,value=latest,enable=${{ matrix.target == 'uploader' }}
-            type=ref,event=tag,enable=${{ github.event_name == 'push' && matrix.target == 'uploader' }}
+            type=raw,value=latest
+            type=ref,event=tag
       - uses: docker/build-push-action@v5
         with:
           context: .
-          target: ${{ matrix.target }}
+          target: runtime
           build-args: |
             PCS_IMAGE=${{ needs.dependency.outputs.image }}
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha,scope=${{ matrix.target }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.target }}
+          cache-from: type=gha,scope=runtime
+          cache-to: type=gha,mode=max,scope=runtime
 
   record:
     needs: [dependency, build]
@@ -117,7 +112,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Record successful uploader publication
+      - name: Record successful image publication
         env:
           PCS_DIGEST: ${{ needs.dependency.outputs.digest }}
         run: printf '%s\n' "$PCS_DIGEST" > /tmp/ingest-pcs-built

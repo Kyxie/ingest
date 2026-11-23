@@ -5,9 +5,7 @@ cd "$(dirname "$0")/.."
 for script in scripts/*.sh; do
   bash -n "$script"
 done
-sh -n deploy/ingest-card-mount
 bash scripts/test-release.sh
-bash scripts/test-eject-card.sh
 
 # Never load local production settings or access production mounts during verification.
 IMAGE_REPOSITORY=ghcr.io/verify/ingest MEDIA_ROOT=/tmp/ingest-verify-media \

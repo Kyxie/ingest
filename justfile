@@ -21,7 +21,7 @@ logs svc="":
 verify:
     bash scripts/verify.sh
 
-# Build both production images with the local/ingest namespace.
+# Build the production image as local/ingest:latest.
 prod-build:
     bash scripts/prod-build.sh
 
@@ -40,14 +40,6 @@ prod-logs svc="":
 # Authorize BaiduPCS-Go interactively and persist its private session on the SSD.
 pcs-login:
     docker compose -f docker-compose.yml run --rm --no-deps --entrypoint BaiduPCS-Go uploader login
-
-# Preview or apply a project upload on the Swarm host.
-pcs-upload device project *flags:
-    bash scripts/host-project.sh "$@"
-
-# Safely unmount the mounted SD card on the miniPC before unplugging it.
-eject partition="":
-    bash scripts/eject-card.sh ${1:+"$1"}
 
 # Mark a batch as no longer needed by any share before retention cleanup.
 batch-release batch:

@@ -1,2 +1,0 @@
-# Only removable FAT/exFAT camera-card candidates. Helper also refuses fixed disks.
-ACTION=="add|change", SUBSYSTEM=="block", ENV{DEVTYPE}=="partition", ENV{ID_FS_TYPE}=="vfat|exfat", ATTRS{removable}=="1", TAG+="systemd", ENV{SYSTEMD_WANTS}+="ingest-card@%k.service"
